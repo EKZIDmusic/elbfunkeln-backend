@@ -2,6 +2,8 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { prisma } from './prisma';
 
+import type { Secret } from 'jsonwebtoken';
+
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
@@ -32,7 +34,9 @@ export async function verifyPassword(
  * Generate a JWT token
  */
 export function generateToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign(payload, JWT_SECRET, { 
+    expiresIn: JWT_EXPIRES_IN as string | number
+  });
 }
 
 /**

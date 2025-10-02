@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ZodError } from 'zod';
+import { ZodError, ZodIssue } from 'zod';
 
 /**
  * Success response helper
@@ -35,7 +35,7 @@ export function validationErrorResponse(error: ZodError) {
     {
       success: false,
       error: 'Validation error',
-      details: error.errors.map((err) => ({
+      details: error.issues.map((err: ZodIssue) => ({
         field: err.path.join('.'),
         message: err.message,
       })),

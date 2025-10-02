@@ -50,7 +50,7 @@ export const createProductSchema = z.object({
   active: z.boolean().optional(),
   weight: z.number().int().positive().optional(),
   images: z.array(z.string().url()).min(1, 'At least one image is required'),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(), // ✅ Korrigiert: Key- und Value-Typ
 });
 
 export const updateProductSchema = createProductSchema.partial();
@@ -79,7 +79,7 @@ export const createPaymentIntentSchema = z.object({
   orderId: z.string().uuid('Invalid order ID'),
   amount: z.number().positive('Amount must be positive'),
   currency: z.string().default('eur'),
-  metadata: z.record(z.string()).optional(),
+  metadata: z.record(z.string(), z.string()).optional(), // ✅ Korrigiert: Key- und Value-Typ
 });
 
 // Gift Card Schemas

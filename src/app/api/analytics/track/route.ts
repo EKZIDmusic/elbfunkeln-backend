@@ -11,7 +11,7 @@ import {
 const trackEventSchema = z.object({
   eventType: z.string(),
   sessionId: z.string().optional(),
-  data: z.record(z.any()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 });
 
 /**
