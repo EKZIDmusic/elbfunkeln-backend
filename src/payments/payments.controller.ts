@@ -17,7 +17,6 @@ import {
   ApiOperation,
   ApiBearerAuth,
   ApiResponse,
-  ApiExcludeEndpoint,
 } from '@nestjs/swagger';
 import { Request } from 'express';
 import { PaymentsService } from './payments.service';
@@ -50,15 +49,18 @@ export class PaymentsController {
     @GetUser('id') userId: string,
     @Body() createPaymentIntentDto: CreatePaymentIntentDto,
   ) {
-    return this.paymentsService.createPaymentIntent(userId, createPaymentIntentDto);
+    return this.paymentsService.createPaymentIntent(
+      userId,
+      createPaymentIntentDto,
+    );
   }
 
   @Get('intent/:id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get payment intent status' })
-  @ApiResponse({ status: 200, description: 'Payment intent status retrieved' })
-  async getPaymentIntentStatus(@Param('id') paymentIntentId: string) {
+  @ApiResponse({ status: 200, description: 'Payment intent retrieved' })
+  async getPaymentIntent(@Param('id') paymentIntentId: string) {
     return this.paymentsService.getPaymentIntentStatus(paymentIntentId);
   }
 
@@ -68,7 +70,10 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Confirm payment' })
   @ApiResponse({ status: 200, description: 'Payment confirmed' })
   async confirmPayment(@Body() confirmPaymentDto: ConfirmPaymentDto) {
-    return this.paymentsService.confirmPayment(confirmPaymentDto);
+    return this.paymentsService.confirmPayment(
+      confirmPaymentDto.paymentIntentId,
+      confirmPaymentDto.paymentMethodId,
+    );
   }
 
   @Post('cancel/:id')
@@ -81,12 +86,14 @@ export class PaymentsController {
     return this.paymentsService.cancelPayment(paymentIntentId);
   }
 
-  // ==================== Payment Methods Endpoints ====================
+  // ==================== Payment Methods ====================
 
   @Get('methods')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get available payment methods' })
   @ApiResponse({ status: 200, description: 'Payment methods retrieved' })
-  async getAvailablePaymentMethods() {
+  getAvailablePaymentMethods() {
     return this.paymentsService.getAvailablePaymentMethods();
   }
 
@@ -114,31 +121,34 @@ export class PaymentsController {
   @Delete('methods/:id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @HttpCode(HttpStatus.OK)
+  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete payment method' })
-  @ApiResponse({ status: 200, description: 'Payment method deleted' })
+  @ApiResponse({ status: 204, description: 'Payment method deleted' })
   async deletePaymentMethod(
     @GetUser('id') userId: string,
     @Param('id') paymentMethodId: string,
   ) {
-    return this.paymentsService.deletePaymentMethod(userId, paymentMethodId);
+    await this.paymentsService.deletePaymentMethod(userId, paymentMethodId);
   }
 
-  // ==================== Webhook Endpoint ====================
+  // ==================== Webhook ====================
 
-  @Post('webhooks/stripe')
+  @Post('webhook')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @ApiExcludeEndpoint()
-  async handleStripeWebhook(
+  @ApiOperation({ summary: 'Stripe webhook endpoint' })
+  @ApiResponse({ status: 200, description: 'Webhook processed' })
+  async handleWebhook(
     @Headers('stripe-signature') signature: string,
     @Req() request: RawBodyRequest<Request>,
   ) {
-    const event = this.stripeService.constructWebhookEvent(
-      request.rawBody,
-      signature,
-    );
+    const rawBody = request.rawBody;
 
+    if (!rawBody) {
+      throw new Error('Raw body is required for webhook signature verification');
+    }
+
+    const event = this.stripeService.constructWebhookEvent(rawBody, signature);
     await this.webhookHandler.handleWebhookEvent(event);
 
     return { received: true };

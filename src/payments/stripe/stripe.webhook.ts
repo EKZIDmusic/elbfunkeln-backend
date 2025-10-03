@@ -13,27 +13,41 @@ export class StripeWebhookHandler {
    * Handle Stripe Webhook Events
    */
   async handleWebhookEvent(event: Stripe.Event): Promise<void> {
-    this.logger.log(`Received webhook event: ${event.type}`);
+    this.logger.log(`Handling webhook event: ${event.type}`);
 
     switch (event.type) {
       case 'payment_intent.succeeded':
-        await this.handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
+        await this.handlePaymentIntentSucceeded(
+          event.data.object as Stripe.PaymentIntent,
+        );
         break;
 
       case 'payment_intent.payment_failed':
-        await this.handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
+        await this.handlePaymentIntentFailed(
+          event.data.object as Stripe.PaymentIntent,
+        );
         break;
 
       case 'payment_intent.canceled':
-        await this.handlePaymentIntentCanceled(event.data.object as Stripe.PaymentIntent);
+        await this.handlePaymentIntentCanceled(
+          event.data.object as Stripe.PaymentIntent,
+        );
+        break;
+
+      case 'charge.succeeded':
+        await this.handleChargeSucceeded(event.data.object as Stripe.Charge);
         break;
 
       case 'charge.refunded':
         await this.handleChargeRefunded(event.data.object as Stripe.Charge);
         break;
 
-      case 'charge.dispute.created':
-        await this.handleDisputeCreated(event.data.object as Stripe.Dispute);
+      case 'customer.created':
+        this.logger.log('Customer created in Stripe');
+        break;
+
+      case 'payment_method.attached':
+        this.logger.log('Payment method attached to customer');
         break;
 
       default:
@@ -42,63 +56,67 @@ export class StripeWebhookHandler {
   }
 
   /**
-   * Payment Intent Succeeded
+   * Handle successful payment
    */
-  private async handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
+  private async handlePaymentIntentSucceeded(
+    paymentIntent: Stripe.PaymentIntent,
+  ): Promise<void> {
     try {
-      const order = await this.prisma.order.findFirst({
-        where: { stripePaymentIntentId: paymentIntent.id },
-      });
+      const orderId = paymentIntent.metadata?.orderId;
 
-      if (!order) {
-        this.logger.warn(`Order not found for payment intent: ${paymentIntent.id}`);
+      if (!orderId) {
+        this.logger.warn('No orderId in payment intent metadata');
         return;
       }
 
+      // Update order status
       await this.prisma.order.update({
-        where: { id: order.id },
+        where: { id: orderId },
         data: {
           isPaid: true,
           paidAt: new Date(),
           status: OrderStatus.CONFIRMED,
+          stripePaymentIntentId: paymentIntent.id,
         },
       });
 
-      this.logger.log(`Order ${order.orderNumber} marked as paid`);
+      this.logger.log(`Order ${orderId} marked as paid`);
 
-      // TODO: Send order confirmation email
+      // TODO: Send confirmation email
+      // await this.emailService.sendOrderConfirmation(order);
     } catch (error) {
-      this.logger.error('Error handling payment_intent.succeeded', error);
+      this.logger.error('Error handling payment success:', error);
     }
   }
 
   /**
-   * Payment Intent Failed
+   * Handle failed payment
    */
-  private async handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
+  private async handlePaymentIntentFailed(
+    paymentIntent: Stripe.PaymentIntent,
+  ): Promise<void> {
     try {
-      const order = await this.prisma.order.findFirst({
-        where: { stripePaymentIntentId: paymentIntent.id },
-      });
+      const orderId = paymentIntent.metadata?.orderId;
 
-      if (!order) {
-        this.logger.warn(`Order not found for payment intent: ${paymentIntent.id}`);
+      if (!orderId) {
+        this.logger.warn('No orderId in payment intent metadata');
         return;
       }
 
+      // Update order status
       await this.prisma.order.update({
-        where: { id: order.id },
+        where: { id: orderId },
         data: {
-          status: OrderStatus.CANCELLED,
-          adminNotes: `Zahlung fehlgeschlagen: ${paymentIntent.last_payment_error?.message || 'Unbekannter Fehler'}`,
+          status: OrderStatus.PAYMENT_FAILED,
+          adminNotes: `Payment failed: ${paymentIntent.last_payment_error?.message || 'Unknown error'}`,
         },
       });
 
-      this.logger.log(`Order ${order.orderNumber} marked as cancelled due to payment failure`);
+      this.logger.log(`Order ${orderId} marked as payment failed`);
 
       // Restore product stock
       const orderItems = await this.prisma.orderItem.findMany({
-        where: { orderId: order.id },
+        where: { orderId },
       });
 
       for (const item of orderItems) {
@@ -112,38 +130,40 @@ export class StripeWebhookHandler {
       }
 
       // TODO: Send payment failed email
+      // await this.emailService.sendPaymentFailed(order);
     } catch (error) {
-      this.logger.error('Error handling payment_intent.payment_failed', error);
+      this.logger.error('Error handling payment failure:', error);
     }
   }
 
   /**
-   * Payment Intent Canceled
+   * Handle canceled payment
    */
-  private async handlePaymentIntentCanceled(paymentIntent: Stripe.PaymentIntent) {
+  private async handlePaymentIntentCanceled(
+    paymentIntent: Stripe.PaymentIntent,
+  ): Promise<void> {
     try {
-      const order = await this.prisma.order.findFirst({
-        where: { stripePaymentIntentId: paymentIntent.id },
-      });
+      const orderId = paymentIntent.metadata?.orderId;
 
-      if (!order) {
-        this.logger.warn(`Order not found for payment intent: ${paymentIntent.id}`);
+      if (!orderId) {
+        this.logger.warn('No orderId in payment intent metadata');
         return;
       }
 
+      // Update order status
       await this.prisma.order.update({
-        where: { id: order.id },
+        where: { id: orderId },
         data: {
           status: OrderStatus.CANCELLED,
-          adminNotes: 'Zahlung wurde storniert',
+          adminNotes: 'Payment intent was cancelled',
         },
       });
 
-      this.logger.log(`Order ${order.orderNumber} cancelled`);
+      this.logger.log(`Order ${orderId} marked as cancelled`);
 
       // Restore product stock
       const orderItems = await this.prisma.orderItem.findMany({
-        where: { orderId: order.id },
+        where: { orderId },
       });
 
       for (const item of orderItems) {
@@ -156,66 +176,55 @@ export class StripeWebhookHandler {
         });
       }
     } catch (error) {
-      this.logger.error('Error handling payment_intent.canceled', error);
+      this.logger.error('Error handling payment cancellation:', error);
     }
   }
 
   /**
-   * Charge Refunded
+   * Handle successful charge
    */
-  private async handleChargeRefunded(charge: Stripe.Charge) {
-    try {
-      const order = await this.prisma.order.findFirst({
-        where: { stripePaymentIntentId: charge.payment_intent as string },
-      });
+  private async handleChargeSucceeded(charge: Stripe.Charge): Promise<void> {
+    this.logger.log(`Charge succeeded: ${charge.id}`);
+    // Additional charge handling logic can be added here
+  }
 
-      if (!order) {
-        this.logger.warn(`Order not found for charge: ${charge.id}`);
+  /**
+   * Handle refunded charge
+   */
+  private async handleChargeRefunded(charge: Stripe.Charge): Promise<void> {
+    try {
+      const paymentIntentId = charge.payment_intent as string;
+
+      if (!paymentIntentId) {
+        this.logger.warn('No payment intent ID in charge');
         return;
       }
 
+      // Find order by payment intent ID
+      const order = await this.prisma.order.findFirst({
+        where: { stripePaymentIntentId: paymentIntentId },
+      });
+
+      if (!order) {
+        this.logger.warn(`No order found for payment intent ${paymentIntentId}`);
+        return;
+      }
+
+      // Update order status
       await this.prisma.order.update({
         where: { id: order.id },
         data: {
           status: OrderStatus.REFUNDED,
-          adminNotes: `Rückerstattung durchgeführt: ${charge.amount_refunded / 100}€`,
+          adminNotes: `Refund processed: ${charge.amount_refunded / 100} EUR`,
         },
       });
 
-      this.logger.log(`Order ${order.orderNumber} refunded`);
+      this.logger.log(`Order ${order.id} marked as refunded`);
 
       // TODO: Send refund confirmation email
+      // await this.emailService.sendRefundConfirmation(order);
     } catch (error) {
-      this.logger.error('Error handling charge.refunded', error);
-    }
-  }
-
-  /**
-   * Dispute Created
-   */
-  private async handleDisputeCreated(dispute: Stripe.Dispute) {
-    try {
-      const order = await this.prisma.order.findFirst({
-        where: { stripePaymentIntentId: dispute.payment_intent as string },
-      });
-
-      if (!order) {
-        this.logger.warn(`Order not found for dispute: ${dispute.id}`);
-        return;
-      }
-
-      await this.prisma.order.update({
-        where: { id: order.id },
-        data: {
-          adminNotes: `Zahlungsstreit eröffnet: ${dispute.reason}`,
-        },
-      });
-
-      this.logger.warn(`Dispute created for order ${order.orderNumber}`);
-
-      // TODO: Send admin notification email
-    } catch (error) {
-      this.logger.error('Error handling charge.dispute.created', error);
+      this.logger.error('Error handling charge refund:', error);
     }
   }
 }

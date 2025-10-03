@@ -2,7 +2,6 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StripeService } from './stripe/stripe.service';
 import { CreatePaymentIntentDto } from './dto/create-payment-intent.dto';
-import { ConfirmPaymentDto } from './dto/confirm-payment.dto';
 import { SavePaymentMethodDto, PaymentMethodResponseDto } from './dto/payment-method.dto';
 
 @Injectable()
@@ -19,7 +18,7 @@ export class PaymentsService {
     userId: string,
     createPaymentIntentDto: CreatePaymentIntentDto,
   ) {
-    const { amount, currency, paymentMethodTypes, metadata, orderId } = createPaymentIntentDto;
+    const { amount, currency, orderId, description, metadata } = createPaymentIntentDto;
 
     // Get or create Stripe customer
     const user = await this.prisma.user.findUnique({
@@ -38,6 +37,7 @@ export class PaymentsService {
         `${user.firstName} ${user.lastName}`,
         { userId: user.id },
       );
+
       stripeCustomerId = customer.id;
 
       await this.prisma.user.update({
@@ -50,20 +50,17 @@ export class PaymentsService {
     const paymentIntent = await this.stripeService.createPaymentIntent(
       amount,
       currency,
-      paymentMethodTypes,
       {
-        ...metadata,
         userId,
         orderId: orderId || '',
         customerEmail: user.email,
+        ...metadata,
       },
     );
 
     return {
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
-      amount: paymentIntent.amount,
-      currency: paymentIntent.currency,
       status: paymentIntent.status,
     };
   }
@@ -72,14 +69,15 @@ export class PaymentsService {
    * Get Payment Intent Status
    */
   async getPaymentIntentStatus(paymentIntentId: string) {
-    const paymentIntent = await this.stripeService.retrievePaymentIntent(paymentIntentId);
+    const paymentIntent = await this.stripeService.retrievePaymentIntent(
+      paymentIntentId,
+    );
 
     return {
       id: paymentIntent.id,
       status: paymentIntent.status,
       amount: paymentIntent.amount,
       currency: paymentIntent.currency,
-      paymentMethod: paymentIntent.payment_method,
       created: new Date(paymentIntent.created * 1000),
     };
   }
@@ -87,9 +85,7 @@ export class PaymentsService {
   /**
    * Confirm Payment
    */
-  async confirmPayment(confirmPaymentDto: ConfirmPaymentDto) {
-    const { paymentIntentId, paymentMethodId } = confirmPaymentDto;
-
+  async confirmPayment(paymentIntentId: string, paymentMethodId: string) {
     const paymentIntent = await this.stripeService.confirmPaymentIntent(
       paymentIntentId,
       paymentMethodId,
@@ -107,7 +103,9 @@ export class PaymentsService {
    * Cancel Payment
    */
   async cancelPayment(paymentIntentId: string) {
-    const paymentIntent = await this.stripeService.cancelPaymentIntent(paymentIntentId);
+    const paymentIntent = await this.stripeService.cancelPaymentIntent(
+      paymentIntentId,
+    );
 
     return {
       id: paymentIntent.id,
@@ -119,53 +117,33 @@ export class PaymentsService {
   /**
    * Get Available Payment Methods
    */
-  async getAvailablePaymentMethods() {
-    return {
-      methods: [
-        {
-          type: 'card',
-          name: 'Kreditkarte',
-          description: 'Visa, Mastercard, American Express',
-          icon: '💳',
-          enabled: true,
-        },
-        {
-          type: 'sepa_debit',
-          name: 'SEPA-Lastschrift',
-          description: 'Bankeinzug',
-          icon: '🏦',
-          enabled: true,
-        },
-        {
-          type: 'sofort',
-          name: 'Sofortüberweisung',
-          description: 'Sofort bezahlen',
-          icon: '⚡',
-          enabled: true,
-        },
-        {
-          type: 'klarna',
-          name: 'Klarna',
-          description: 'Später bezahlen',
-          icon: '🛍️',
-          enabled: false,
-        },
-        {
-          type: 'apple_pay',
-          name: 'Apple Pay',
-          description: 'Apple Pay',
-          icon: '🍎',
-          enabled: true,
-        },
-        {
-          type: 'google_pay',
-          name: 'Google Pay',
-          description: 'Google Pay',
-          icon: '🔵',
-          enabled: true,
-        },
-      ],
-    };
+  getAvailablePaymentMethods() {
+    return [
+      {
+        id: 'card',
+        name: 'Kreditkarte',
+        types: ['Visa', 'Mastercard', 'American Express'],
+        icon: 'credit-card',
+      },
+      {
+        id: 'sepa_debit',
+        name: 'SEPA-Lastschrift',
+        types: ['SEPA'],
+        icon: 'bank',
+      },
+      {
+        id: 'sofort',
+        name: 'Sofortüberweisung',
+        types: ['Sofort'],
+        icon: 'transfer',
+      },
+      {
+        id: 'klarna',
+        name: 'Klarna',
+        types: ['Pay now', 'Pay later'],
+        icon: 'klarna',
+      },
+    ];
   }
 
   /**
@@ -174,23 +152,36 @@ export class PaymentsService {
   async savePaymentMethod(
     userId: string,
     savePaymentMethodDto: SavePaymentMethodDto,
-  ): Promise<PaymentMethodResponseDto> {
+  ) {
+    const { paymentMethodId, setAsDefault } = savePaymentMethodDto;
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
 
-    if (!user?.stripeCustomerId) {
+    if (!user || !user.stripeCustomerId) {
       throw new NotFoundException('Stripe-Kunde nicht gefunden');
     }
 
-    const paymentMethod = await this.stripeService.attachPaymentMethod(
-      savePaymentMethodDto.paymentMethodId,
+    // Attach payment method to customer
+    await this.stripeService.attachPaymentMethod(
+      paymentMethodId,
       user.stripeCustomerId,
     );
 
-    // TODO: Save to database if needed
+    // Set as default if requested
+    if (setAsDefault) {
+      await this.stripeService.setDefaultPaymentMethod(
+        user.stripeCustomerId,
+        paymentMethodId,
+      );
+    }
 
-    return this.formatPaymentMethod(paymentMethod, savePaymentMethodDto.setAsDefault || false);
+    return {
+      message: 'Zahlungsmethode erfolgreich gespeichert',
+      paymentMethodId,
+      isDefault: setAsDefault || false,
+    };
   }
 
   /**
@@ -201,56 +192,64 @@ export class PaymentsService {
       where: { id: userId },
     });
 
-    if (!user?.stripeCustomerId) {
+    if (!user || !user.stripeCustomerId) {
       return [];
     }
 
-    const paymentMethods = await this.stripeService.listPaymentMethods(user.stripeCustomerId);
+    const paymentMethods = await this.stripeService.listPaymentMethods(
+      user.stripeCustomerId,
+    );
 
-    return paymentMethods.map((pm) => this.formatPaymentMethod(pm, false));
+    const customer = await this.stripeService.retrieveCustomer(
+      user.stripeCustomerId,
+    );
+
+    const defaultPaymentMethodId =
+      customer.invoice_settings?.default_payment_method as string | null;
+
+    return paymentMethods.map((pm) => ({
+      id: pm.id,
+      type: pm.type,
+      card: pm.card
+        ? {
+            brand: pm.card.brand,
+            last4: pm.card.last4,
+            exp_month: pm.card.exp_month,
+            exp_year: pm.card.exp_year,
+          }
+        : undefined,
+      isDefault: pm.id === defaultPaymentMethodId,
+      createdAt: new Date(pm.created * 1000),
+    }));
   }
 
   /**
    * Delete Payment Method
    */
   async deletePaymentMethod(userId: string, paymentMethodId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || !user.stripeCustomerId) {
+      throw new NotFoundException('Stripe-Kunde nicht gefunden');
+    }
+
+    // Verify payment method belongs to user
+    const paymentMethods = await this.stripeService.listPaymentMethods(
+      user.stripeCustomerId,
+    );
+
+    const paymentMethod = paymentMethods.find((pm) => pm.id === paymentMethodId);
+
+    if (!paymentMethod) {
+      throw new NotFoundException('Zahlungsmethode nicht gefunden');
+    }
+
     await this.stripeService.detachPaymentMethod(paymentMethodId);
 
     return {
       message: 'Zahlungsmethode erfolgreich gelöscht',
     };
-  }
-
-  /**
-   * Format Payment Method for Response
-   */
-  private formatPaymentMethod(
-    paymentMethod: any,
-    isDefault: boolean,
-  ): PaymentMethodResponseDto {
-    const formatted: PaymentMethodResponseDto = {
-      id: paymentMethod.id,
-      type: paymentMethod.type,
-      isDefault,
-      createdAt: new Date(paymentMethod.created * 1000),
-    };
-
-    if (paymentMethod.card) {
-      formatted.card = {
-        brand: paymentMethod.card.brand,
-        last4: paymentMethod.card.last4,
-        expMonth: paymentMethod.card.exp_month,
-        expYear: paymentMethod.card.exp_year,
-      };
-    }
-
-    if (paymentMethod.sepa_debit) {
-      formatted.sepaDebit = {
-        last4: paymentMethod.sepa_debit.last4,
-        bankCode: paymentMethod.sepa_debit.bank_code,
-      };
-    }
-
-    return formatted;
   }
 }

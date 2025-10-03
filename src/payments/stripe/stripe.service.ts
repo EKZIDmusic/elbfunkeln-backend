@@ -1,4 +1,3 @@
-
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
@@ -9,14 +8,15 @@ export class StripeService {
   private readonly logger = new Logger(StripeService.name);
 
   constructor(private readonly configService: ConfigService) {
-    const apiKey = this.configService.get<string>('STRIPE_SECRET_KEY');
+    const secretKey = this.configService.get<string>('stripe.secretKey');
     
-    if (!apiKey) {
-      throw new Error('STRIPE_SECRET_KEY is not defined in environment variables');
+    if (!secretKey) {
+      throw new Error('Stripe secret key is not configured');
     }
 
-    this.stripe = new Stripe(apiKey, {
+    this.stripe = new Stripe(secretKey, {
       apiVersion: '2024-11-20.acacia',
+      typescript: true,
     });
   }
 
@@ -26,25 +26,22 @@ export class StripeService {
   async createPaymentIntent(
     amount: number,
     currency: string,
-    paymentMethodTypes: string[],
     metadata?: Record<string, string>,
   ): Promise<Stripe.PaymentIntent> {
     try {
       const paymentIntent = await this.stripe.paymentIntents.create({
         amount,
         currency,
-        payment_method_types: paymentMethodTypes,
-        metadata,
         automatic_payment_methods: {
           enabled: true,
-          allow_redirects: 'never',
         },
+        metadata: metadata || {},
       });
 
       this.logger.log(`Payment Intent created: ${paymentIntent.id}`);
       return paymentIntent;
     } catch (error) {
-      this.logger.error('Failed to create payment intent', error);
+      this.logger.error('Error creating payment intent:', error);
       throw new BadRequestException('Fehler beim Erstellen der Zahlung');
     }
   }
@@ -52,11 +49,13 @@ export class StripeService {
   /**
    * Retrieve Payment Intent
    */
-  async retrievePaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+  async retrievePaymentIntent(
+    paymentIntentId: string,
+  ): Promise<Stripe.PaymentIntent> {
     try {
       return await this.stripe.paymentIntents.retrieve(paymentIntentId);
     } catch (error) {
-      this.logger.error(`Failed to retrieve payment intent: ${paymentIntentId}`, error);
+      this.logger.error('Error retrieving payment intent:', error);
       throw new BadRequestException('Zahlung nicht gefunden');
     }
   }
@@ -69,24 +68,37 @@ export class StripeService {
     paymentMethodId: string,
   ): Promise<Stripe.PaymentIntent> {
     try {
-      return await this.stripe.paymentIntents.confirm(paymentIntentId, {
-        payment_method: paymentMethodId,
-      });
+      const paymentIntent = await this.stripe.paymentIntents.confirm(
+        paymentIntentId,
+        {
+          payment_method: paymentMethodId,
+        },
+      );
+
+      this.logger.log(`Payment Intent confirmed: ${paymentIntent.id}`);
+      return paymentIntent;
     } catch (error) {
-      this.logger.error('Failed to confirm payment intent', error);
-      throw new BadRequestException('Zahlung konnte nicht bestätigt werden');
+      this.logger.error('Error confirming payment intent:', error);
+      throw new BadRequestException('Fehler beim Bestätigen der Zahlung');
     }
   }
 
   /**
    * Cancel Payment Intent
    */
-  async cancelPaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+  async cancelPaymentIntent(
+    paymentIntentId: string,
+  ): Promise<Stripe.PaymentIntent> {
     try {
-      return await this.stripe.paymentIntents.cancel(paymentIntentId);
+      const paymentIntent = await this.stripe.paymentIntents.cancel(
+        paymentIntentId,
+      );
+
+      this.logger.log(`Payment Intent cancelled: ${paymentIntent.id}`);
+      return paymentIntent;
     } catch (error) {
-      this.logger.error('Failed to cancel payment intent', error);
-      throw new BadRequestException('Zahlung konnte nicht storniert werden');
+      this.logger.error('Error cancelling payment intent:', error);
+      throw new BadRequestException('Fehler beim Stornieren der Zahlung');
     }
   }
 
@@ -99,24 +111,17 @@ export class StripeService {
     reason?: string,
   ): Promise<Stripe.Refund> {
     try {
-      const refundData: Stripe.RefundCreateParams = {
+      const refund = await this.stripe.refunds.create({
         payment_intent: paymentIntentId,
-      };
+        amount,
+        reason: reason as Stripe.RefundCreateParams.Reason,
+      });
 
-      if (amount) {
-        refundData.amount = amount;
-      }
-
-      if (reason) {
-        refundData.reason = reason as Stripe.RefundCreateParams.Reason;
-      }
-
-      const refund = await this.stripe.refunds.create(refundData);
-      this.logger.log(`Refund created: ${refund.id}`);
+      this.logger.log(`Refund created: ${refund.id} for PI: ${paymentIntentId}`);
       return refund;
     } catch (error) {
-      this.logger.error('Failed to create refund', error);
-      throw new BadRequestException('Rückerstattung konnte nicht durchgeführt werden');
+      this.logger.error('Error creating refund:', error);
+      throw new BadRequestException('Fehler beim Erstellen der Rückerstattung');
     }
   }
 
@@ -129,14 +134,29 @@ export class StripeService {
     metadata?: Record<string, string>,
   ): Promise<Stripe.Customer> {
     try {
-      return await this.stripe.customers.create({
+      const customer = await this.stripe.customers.create({
         email,
         name,
-        metadata,
+        metadata: metadata || {},
       });
+
+      this.logger.log(`Customer created: ${customer.id}`);
+      return customer;
     } catch (error) {
-      this.logger.error('Failed to create customer', error);
-      throw new BadRequestException('Kunde konnte nicht erstellt werden');
+      this.logger.error('Error creating customer:', error);
+      throw new BadRequestException('Fehler beim Erstellen des Kunden');
+    }
+  }
+
+  /**
+   * Retrieve Customer
+   */
+  async retrieveCustomer(customerId: string): Promise<Stripe.Customer> {
+    try {
+      return (await this.stripe.customers.retrieve(customerId)) as Stripe.Customer;
+    } catch (error) {
+      this.logger.error('Error retrieving customer:', error);
+      throw new BadRequestException('Kunde nicht gefunden');
     }
   }
 
@@ -148,29 +168,42 @@ export class StripeService {
     customerId: string,
   ): Promise<Stripe.PaymentMethod> {
     try {
-      return await this.stripe.paymentMethods.attach(paymentMethodId, {
-        customer: customerId,
-      });
+      const paymentMethod = await this.stripe.paymentMethods.attach(
+        paymentMethodId,
+        { customer: customerId },
+      );
+
+      this.logger.log(
+        `Payment Method ${paymentMethodId} attached to customer ${customerId}`,
+      );
+      return paymentMethod;
     } catch (error) {
-      this.logger.error('Failed to attach payment method', error);
-      throw new BadRequestException('Zahlungsmethode konnte nicht gespeichert werden');
+      this.logger.error('Error attaching payment method:', error);
+      throw new BadRequestException('Fehler beim Hinzufügen der Zahlungsmethode');
     }
   }
 
   /**
-   * Detach Payment Method
+   * Detach Payment Method from Customer
    */
-  async detachPaymentMethod(paymentMethodId: string): Promise<Stripe.PaymentMethod> {
+  async detachPaymentMethod(
+    paymentMethodId: string,
+  ): Promise<Stripe.PaymentMethod> {
     try {
-      return await this.stripe.paymentMethods.detach(paymentMethodId);
+      const paymentMethod = await this.stripe.paymentMethods.detach(
+        paymentMethodId,
+      );
+
+      this.logger.log(`Payment Method detached: ${paymentMethodId}`);
+      return paymentMethod;
     } catch (error) {
-      this.logger.error('Failed to detach payment method', error);
-      throw new BadRequestException('Zahlungsmethode konnte nicht gelöscht werden');
+      this.logger.error('Error detaching payment method:', error);
+      throw new BadRequestException('Fehler beim Entfernen der Zahlungsmethode');
     }
   }
 
   /**
-   * List Customer Payment Methods
+   * List Payment Methods for Customer
    */
   async listPaymentMethods(
     customerId: string,
@@ -181,10 +214,37 @@ export class StripeService {
         customer: customerId,
         type,
       });
+
       return paymentMethods.data;
     } catch (error) {
-      this.logger.error('Failed to list payment methods', error);
-      throw new BadRequestException('Zahlungsmethoden konnten nicht geladen werden');
+      this.logger.error('Error listing payment methods:', error);
+      throw new BadRequestException('Fehler beim Abrufen der Zahlungsmethoden');
+    }
+  }
+
+  /**
+   * Set Default Payment Method
+   */
+  async setDefaultPaymentMethod(
+    customerId: string,
+    paymentMethodId: string,
+  ): Promise<Stripe.Customer> {
+    try {
+      const customer = await this.stripe.customers.update(customerId, {
+        invoice_settings: {
+          default_payment_method: paymentMethodId,
+        },
+      });
+
+      this.logger.log(
+        `Default payment method set for customer ${customerId}`,
+      );
+      return customer;
+    } catch (error) {
+      this.logger.error('Error setting default payment method:', error);
+      throw new BadRequestException(
+        'Fehler beim Setzen der Standard-Zahlungsmethode',
+      );
     }
   }
 
@@ -195,22 +255,26 @@ export class StripeService {
     payload: string | Buffer,
     signature: string,
   ): Stripe.Event {
-    const webhookSecret = this.configService.get<string>('STRIPE_WEBHOOK_SECRET');
-    
+    const webhookSecret = this.configService.get<string>('stripe.webhookSecret');
+
     if (!webhookSecret) {
-      throw new Error('STRIPE_WEBHOOK_SECRET is not defined');
+      throw new Error('Stripe webhook secret is not configured');
     }
 
     try {
-      return this.stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+      return this.stripe.webhooks.constructEvent(
+        payload,
+        signature,
+        webhookSecret,
+      );
     } catch (error) {
-      this.logger.error('Failed to construct webhook event', error);
+      this.logger.error('Webhook signature verification failed:', error);
       throw new BadRequestException('Invalid webhook signature');
     }
   }
 
   /**
-   * Get Stripe instance (for advanced usage)
+   * Get Stripe Instance (for advanced usage)
    */
   getStripeInstance(): Stripe {
     return this.stripe;
