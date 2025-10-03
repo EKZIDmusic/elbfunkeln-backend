@@ -9,12 +9,13 @@ import { AccountingService } from './accounting.service';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { UserRole } from '@prisma/client';
 
 @ApiTags('Accounting')
 @Controller('accounting')
+// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN)
+// eslint-disable-next-line @typescript-eslint/no-unsafe-call
+@Roles('ADMIN')
 @ApiBearerAuth()
 export class AccountingController {
   constructor(private readonly accountingService: AccountingService) {}
