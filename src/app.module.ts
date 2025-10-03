@@ -12,6 +12,11 @@ import { CartModule } from './cart/cart.module';
 import { OrdersModule } from './orders/orders.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { DiscountsModule } from './discounts/discounts.module';
+import { GiftCardsModule } from './gift-cards/gift-cards.module';
+import { TicketsModule } from './tickets/tickets.module';
+import { NewsletterModule } from './newsletter/newsletter.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { HealthModule } from './health/health.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 
@@ -42,10 +47,13 @@ import { RolesGuard } from './auth/guards/roles.guard';
     CategoriesModule,
     CartModule,
     OrdersModule,
-    // TODO: Add more modules
-    // PaymentsModule,
-    // ShippingModule,
-    // etc.
+    ReviewsModule,
+    DiscountsModule,
+    GiftCardsModule,
+    TicketsModule,
+    NewsletterModule,
+    AnalyticsModule,
+    HealthModule,
   ],
   providers: [
     // Global Guards
