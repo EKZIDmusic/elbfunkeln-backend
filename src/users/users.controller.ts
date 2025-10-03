@@ -1,47 +1,55 @@
 import {
   Controller,
   Get,
+  Post,
   Put,
   Delete,
-  Post,
   Body,
   Param,
-  UseGuards,
   Query,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
   ApiBearerAuth,
+  ApiResponse,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { GetUser, Roles } from '../auth/decorators/auth.decorators';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { CreateAddressDto, UpdateAddressDto } from './dto/address.dto';
-import { UserRole, UserStatus } from '@prisma/client';
-import { ParseUuidPipe } from '../common/pipes/parse-uuid.pipe';
+import { AddFavoriteDto, RemoveFavoriteDto } from './dto/favorite.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { GetUser } from '../auth/decorators/get-user.decorator';
+import { UserRole } from '@prisma/client';
 
-@ApiTags('Users')
+@ApiTags('users')
 @Controller('users')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@ApiBearerAuth()
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // ==================== PROFILE ====================
+  // ==================== User Profile Endpoints ====================
 
   @Get('profile')
-  @ApiOperation({ summary: 'Get current user profile' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get own profile' })
   @ApiResponse({ status: 200, description: 'Profile retrieved successfully' })
   async getProfile(@GetUser('id') userId: string) {
-    return this.usersService.getProfile(userId);
+    return this.usersService.findOne(userId);
   }
 
   @Put('profile')
-  @ApiOperation({ summary: 'Update user profile' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update own profile' })
   @ApiResponse({ status: 200, description: 'Profile updated successfully' })
   async updateProfile(
     @GetUser('id') userId: string,
@@ -51,33 +59,29 @@ export class UsersController {
   }
 
   @Delete('profile')
-  @ApiOperation({ summary: 'Delete user account' })
-  @ApiResponse({ status: 200, description: 'Account deleted successfully' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete own account' })
+  @ApiResponse({ status: 204, description: 'Account deleted successfully' })
   async deleteProfile(@GetUser('id') userId: string) {
-    return this.usersService.deleteProfile(userId);
+    await this.usersService.remove(userId);
   }
 
-  // ==================== ADDRESSES ====================
+  // ==================== Address Management ====================
 
   @Get('addresses')
-  @ApiOperation({ summary: 'Get all user addresses' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all addresses' })
   @ApiResponse({ status: 200, description: 'Addresses retrieved successfully' })
   async getAddresses(@GetUser('id') userId: string) {
     return this.usersService.getAddresses(userId);
   }
 
-  @Get('addresses/:id')
-  @ApiOperation({ summary: 'Get specific address' })
-  @ApiResponse({ status: 200, description: 'Address retrieved successfully' })
-  @ApiResponse({ status: 404, description: 'Address not found' })
-  async getAddress(
-    @GetUser('id') userId: string,
-    @Param('id', ParseUuidPipe) addressId: string,
-  ) {
-    return this.usersService.getAddress(userId, addressId);
-  }
-
   @Post('addresses')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Create new address' })
   @ApiResponse({ status: 201, description: 'Address created successfully' })
   async createAddress(
@@ -88,124 +92,145 @@ export class UsersController {
   }
 
   @Put('addresses/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Update address' })
   @ApiResponse({ status: 200, description: 'Address updated successfully' })
-  @ApiResponse({ status: 404, description: 'Address not found' })
   async updateAddress(
     @GetUser('id') userId: string,
-    @Param('id', ParseUuidPipe) addressId: string,
+    @Param('id') addressId: string,
     @Body() updateAddressDto: UpdateAddressDto,
   ) {
     return this.usersService.updateAddress(userId, addressId, updateAddressDto);
   }
 
   @Delete('addresses/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete address' })
-  @ApiResponse({ status: 200, description: 'Address deleted successfully' })
-  @ApiResponse({ status: 404, description: 'Address not found' })
+  @ApiResponse({ status: 204, description: 'Address deleted successfully' })
   async deleteAddress(
     @GetUser('id') userId: string,
-    @Param('id', ParseUuidPipe) addressId: string,
+    @Param('id') addressId: string,
   ) {
-    return this.usersService.deleteAddress(userId, addressId);
+    await this.usersService.deleteAddress(userId, addressId);
   }
 
-  // ==================== FAVORITES ====================
+  // ==================== Favorites ====================
 
   @Get('favorites')
-  @ApiOperation({ summary: 'Get user favorites' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get favorite products' })
   @ApiResponse({ status: 200, description: 'Favorites retrieved successfully' })
   async getFavorites(@GetUser('id') userId: string) {
     return this.usersService.getFavorites(userId);
   }
 
-  @Post('favorites/:productId')
+  @Post('favorites')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Add product to favorites' })
-  @ApiResponse({ status: 201, description: 'Added to favorites' })
-  @ApiResponse({ status: 409, description: 'Already in favorites' })
+  @ApiResponse({ status: 201, description: 'Product added to favorites' })
   async addFavorite(
     @GetUser('id') userId: string,
-    @Param('productId', ParseUuidPipe) productId: string,
+    @Body() addFavoriteDto: AddFavoriteDto,
   ) {
-    return this.usersService.addFavorite(userId, productId);
+    return this.usersService.addFavorite(userId, addFavoriteDto.productId);
   }
 
   @Delete('favorites/:productId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove product from favorites' })
-  @ApiResponse({ status: 200, description: 'Removed from favorites' })
-  @ApiResponse({ status: 404, description: 'Favorite not found' })
+  @ApiResponse({ status: 204, description: 'Product removed from favorites' })
   async removeFavorite(
     @GetUser('id') userId: string,
-    @Param('productId', ParseUuidPipe) productId: string,
+    @Param('productId') productId: string,
   ) {
-    return this.usersService.removeFavorite(userId, productId);
+    await this.usersService.removeFavorite(userId, productId);
   }
 
-  // ==================== ORDERS ====================
+  // ==================== Order History ====================
 
   @Get('orders')
-  @ApiOperation({ summary: 'Get user order history' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get order history' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
-  async getOrderHistory(@GetUser('id') userId: string) {
-    return this.usersService.getOrderHistory(userId);
+  async getOrderHistory(
+    @GetUser('id') userId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    return this.usersService.getOrderHistory(userId, pageNum, limitNum);
   }
-}
 
-@ApiTags('Admin - Users')
-@Controller('admin/users')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN)
-@ApiBearerAuth()
-export class AdminUsersController {
-  constructor(private readonly usersService: UsersService) {}
+  // ==================== Admin Endpoints ====================
 
   @Get()
-  @ApiOperation({ summary: 'Get all users (Admin)' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all users (Admin only)' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Users retrieved successfully' })
-  async getAllUsers(
-    @Query('role') role?: UserRole,
-    @Query('status') status?: UserStatus,
+  async findAll(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
   ) {
-    return this.usersService.getAllUsers(role, status);
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    return this.usersService.findAll(pageNum, limitNum, search);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get user by ID (Admin)' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get user by ID (Admin only)' })
   @ApiResponse({ status: 200, description: 'User retrieved successfully' })
-  @ApiResponse({ status: 404, description: 'User not found' })
-  async getUserById(@Param('id', ParseUuidPipe) userId: string) {
-    return this.usersService.getUserById(userId);
+  async findOne(@Param('id') id: string) {
+    return this.usersService.findOne(id);
   }
 
   @Put(':id')
-  @ApiOperation({ summary: 'Update user (Admin)' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update user (Admin only)' })
   @ApiResponse({ status: 200, description: 'User updated successfully' })
-  async updateUser(
-    @Param('id', ParseUuidPipe) userId: string,
-    @Body()
-    updateData: {
-      role?: UserRole;
-      status?: UserStatus;
-      emailVerified?: boolean;
-    },
-  ) {
-    return this.usersService.updateUser(userId, updateData);
+  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.update(id, updateUserDto);
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete user (Admin)' })
-  @ApiResponse({ status: 200, description: 'User deleted successfully' })
-  async deleteUser(@Param('id', ParseUuidPipe) userId: string) {
-    return this.usersService.deleteUser(userId);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete user (Admin only)' })
+  @ApiResponse({ status: 204, description: 'User deleted successfully' })
+  async remove(@Param('id') id: string) {
+    await this.usersService.remove(id);
   }
 
   @Post(':id/ban')
-  @ApiOperation({ summary: 'Ban user (Admin)' })
-  @ApiResponse({ status: 200, description: 'User banned successfully' })
-  async banUser(
-    @Param('id', ParseUuidPipe) userId: string,
-    @Body('reason') reason?: string,
-  ) {
-    return this.usersService.banUser(userId, reason);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Ban/Unban user (Admin only)' })
+  @ApiResponse({ status: 200, description: 'User ban status toggled' })
+  async toggleBan(@Param('id') id: string) {
+    return this.usersService.toggleBan(id);
   }
 }

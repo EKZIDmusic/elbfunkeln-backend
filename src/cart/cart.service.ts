@@ -2,20 +2,21 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AddToCartDto, UpdateCartItemDto } from './dto/cart.dto';
-import { ProductStatus } from '@prisma/client';
-import { Decimal } from '@prisma/client/runtime/library';
+import { AddToCartDto } from './dto/add-to-cart.dto';
+import { UpdateCartItemDto } from './dto/update-cart-item.dto';
+import { CartSummaryDto, CartItemSummaryDto } from './dto/cart-summary.dto';
 
 @Injectable()
 export class CartService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  // ==================== CART OPERATIONS ====================
-
-  async getCart(userId: string) {
-    // Get or create cart
+  /**
+   * Get or create cart for user
+   */
+  private async getOrCreateCart(userId: string) {
     let cart = await this.prisma.cart.findUnique({
       where: { userId },
       include: {
@@ -23,16 +24,7 @@ export class CartService {
           include: {
             product: {
               include: {
-                images: {
-                  where: { isMain: true },
-                  take: 1,
-                },
-                category: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
+                images: { take: 1 },
               },
             },
           },
@@ -48,10 +40,7 @@ export class CartService {
             include: {
               product: {
                 include: {
-                  images: {
-                    where: { isMain: true },
-                    take: 1,
-                  },
+                  images: { take: 1 },
                 },
               },
             },
@@ -60,15 +49,20 @@ export class CartService {
       });
     }
 
-    // Calculate totals
-    const summary = this.calculateCartSummary(cart);
-
-    return {
-      ...cart,
-      summary,
-    };
+    return cart;
   }
 
+  /**
+   * Get cart summary
+   */
+  async getCart(userId: string): Promise<CartSummaryDto> {
+    const cart = await this.getOrCreateCart(userId);
+    return this.calculateCartSummary(cart);
+  }
+
+  /**
+   * Add product to cart
+   */
   async addItem(userId: string, addToCartDto: AddToCartDto) {
     const { productId, quantity } = addToCartDto;
 
@@ -78,61 +72,49 @@ export class CartService {
     });
 
     if (!product) {
-      throw new NotFoundException('Product not found');
+      throw new NotFoundException('Produkt nicht gefunden');
     }
 
-    if (product.status !== ProductStatus.ACTIVE) {
-      throw new BadRequestException('Product is not available');
+    if (!product.isActive) {
+      throw new BadRequestException('Produkt ist nicht verfügbar');
     }
 
-    if (product.stockQuantity < quantity) {
+    if (product.stock < quantity) {
       throw new BadRequestException(
-        `Only ${product.stockQuantity} items available in stock`,
+        `Nicht genügend Lagerbestand. Verfügbar: ${product.stock}`,
       );
     }
 
-    // Get or create cart
-    let cart = await this.prisma.cart.findUnique({
-      where: { userId },
-    });
+    const cart = await this.getOrCreateCart(userId);
 
-    if (!cart) {
-      cart = await this.prisma.cart.create({
-        data: { userId },
-      });
-    }
-
-    // Check if item already in cart
-    const existingItem = await this.prisma.cartItem.findUnique({
-      where: {
-        cartId_productId: {
-          cartId: cart.id,
-          productId,
-        },
-      },
-    });
+    // Check if item already exists in cart
+    const existingItem = cart.items.find(
+      (item) => item.productId === productId,
+    );
 
     if (existingItem) {
-      // Update quantity
       const newQuantity = existingItem.quantity + quantity;
 
-      if (newQuantity > product.stockQuantity) {
+      if (newQuantity > product.stock) {
         throw new BadRequestException(
-          `Cannot add ${quantity} more. Only ${product.stockQuantity - existingItem.quantity} items available`,
+          `Nicht genügend Lagerbestand. Verfügbar: ${product.stock}`,
         );
       }
 
       await this.prisma.cartItem.update({
         where: { id: existingItem.id },
-        data: { quantity: newQuantity },
+        data: {
+          quantity: newQuantity,
+          price: product.price, // Update price in case it changed
+        },
       });
     } else {
-      // Add new item
       await this.prisma.cartItem.create({
         data: {
           cartId: cart.id,
           productId,
           quantity,
+          price: product.price,
         },
       });
     }
@@ -140,6 +122,9 @@ export class CartService {
     return this.getCart(userId);
   }
 
+  /**
+   * Update cart item quantity
+   */
   async updateItem(
     userId: string,
     itemId: string,
@@ -147,74 +132,50 @@ export class CartService {
   ) {
     const { quantity } = updateCartItemDto;
 
-    // Get cart
-    const cart = await this.prisma.cart.findUnique({
-      where: { userId },
-    });
+    const cart = await this.getOrCreateCart(userId);
 
-    if (!cart) {
-      throw new NotFoundException('Cart not found');
-    }
-
-    // Get cart item
-    const cartItem = await this.prisma.cartItem.findFirst({
-      where: {
-        id: itemId,
-        cartId: cart.id,
-      },
-      include: {
-        product: true,
-      },
-    });
-
-    if (!cartItem) {
-      throw new NotFoundException('Cart item not found');
-    }
-
-    // If quantity is 0, remove item
-    if (quantity === 0) {
-      return this.removeItem(userId, itemId);
+    const item = cart.items.find((i) => i.id === itemId);
+    if (!item) {
+      throw new NotFoundException('Artikel nicht im Warenkorb gefunden');
     }
 
     // Check stock availability
-    if (quantity > cartItem.product.stockQuantity) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: item.productId },
+    });
+
+    if (!product) {
+      throw new NotFoundException('Produkt nicht mehr verfügbar');
+    }
+
+    if (product.stock < quantity) {
       throw new BadRequestException(
-        `Only ${cartItem.product.stockQuantity} items available in stock`,
+        `Nicht genügend Lagerbestand. Verfügbar: ${product.stock}`,
       );
     }
 
-    // Update quantity
     await this.prisma.cartItem.update({
       where: { id: itemId },
-      data: { quantity },
+      data: {
+        quantity,
+        price: product.price, // Update price
+      },
     });
 
     return this.getCart(userId);
   }
 
+  /**
+   * Remove item from cart
+   */
   async removeItem(userId: string, itemId: string) {
-    // Get cart
-    const cart = await this.prisma.cart.findUnique({
-      where: { userId },
-    });
+    const cart = await this.getOrCreateCart(userId);
 
-    if (!cart) {
-      throw new NotFoundException('Cart not found');
+    const item = cart.items.find((i) => i.id === itemId);
+    if (!item) {
+      throw new NotFoundException('Artikel nicht im Warenkorb gefunden');
     }
 
-    // Check if item exists in cart
-    const cartItem = await this.prisma.cartItem.findFirst({
-      where: {
-        id: itemId,
-        cartId: cart.id,
-      },
-    });
-
-    if (!cartItem) {
-      throw new NotFoundException('Cart item not found');
-    }
-
-    // Remove item
     await this.prisma.cartItem.delete({
       where: { id: itemId },
     });
@@ -222,120 +183,137 @@ export class CartService {
     return this.getCart(userId);
   }
 
+  /**
+   * Clear cart
+   */
   async clearCart(userId: string) {
-    const cart = await this.prisma.cart.findUnique({
-      where: { userId },
-    });
+    const cart = await this.getOrCreateCart(userId);
 
-    if (!cart) {
-      throw new NotFoundException('Cart not found');
-    }
-
-    // Delete all items
     await this.prisma.cartItem.deleteMany({
       where: { cartId: cart.id },
     });
 
-    return { message: 'Cart cleared successfully' };
+    return { message: 'Warenkorb geleert' };
   }
 
-  async validateCart(userId: string) {
-    const cart = await this.prisma.cart.findUnique({
-      where: { userId },
-      include: {
-        items: {
-          include: {
-            product: true,
-          },
-        },
+  /**
+   * Apply discount code
+   */
+  async applyDiscount(userId: string, code: string) {
+    const cart = await this.getOrCreateCart(userId);
+
+    // Validate discount code (TODO: Implement discount validation)
+    // This is a placeholder - will be implemented in Discounts module
+    const discount = await this.validateDiscountCode(code);
+
+    if (!discount) {
+      throw new BadRequestException('Ungültiger Rabattcode');
+    }
+
+    await this.prisma.cart.update({
+      where: { id: cart.id },
+      data: {
+        discountCode: code,
+        discountAmount: discount.amount,
       },
     });
 
-    if (!cart || cart.items.length === 0) {
-      throw new BadRequestException('Cart is empty');
-    }
-
-    const issues: Array<{
-      itemId: string;
-      productId: string;
-      productName: string;
-      issue: string;
-    }> = [];
-
-    // Check each item
-    for (const item of cart.items) {
-      // Check if product is active
-      if (item.product.status !== ProductStatus.ACTIVE) {
-        issues.push({
-          itemId: item.id,
-          productId: item.product.id,
-          productName: item.product.name,
-          issue: 'Product is no longer available',
-        });
-        continue;
-      }
-
-      // Check stock
-      if (item.product.stockQuantity < item.quantity) {
-        issues.push({
-          itemId: item.id,
-          productId: item.product.id,
-          productName: item.product.name,
-          issue: `Only ${item.product.stockQuantity} items available (requested ${item.quantity})`,
-        });
-      }
-    }
-
-    if (issues.length > 0) {
-      return {
-        valid: false,
-        issues,
-      };
-    }
-
-    return {
-      valid: true,
-      issues: [],
-    };
+    return this.getCart(userId);
   }
 
-  // ==================== HELPERS ====================
+  /**
+   * Remove discount
+   */
+  async removeDiscount(userId: string) {
+    const cart = await this.getOrCreateCart(userId);
 
-  private calculateCartSummary(cart: any) {
-    let subtotal = 0;
-    let itemCount = 0;
+    await this.prisma.cart.update({
+      where: { id: cart.id },
+      data: {
+        discountCode: null,
+        discountAmount: null,
+      },
+    });
 
-    for (const item of cart.items) {
-      const price = Number(item.product.price);
-      const quantity = item.quantity;
-      subtotal += price * quantity;
-      itemCount += quantity;
-    }
+    return this.getCart(userId);
+  }
 
-    const taxRate = 0.19; // 19% German VAT
-    const tax = subtotal * taxRate;
-    const total = subtotal + tax;
+  /**
+   * Calculate cart summary with totals
+   */
+  private calculateCartSummary(cart: any): CartSummaryDto {
+    const items: CartItemSummaryDto[] = cart.items.map((item: any) => ({
+      id: item.id,
+      productId: item.product.id,
+      productName: item.product.name,
+      productImage: item.product.images[0]?.url || null,
+      price: item.price,
+      quantity: item.quantity,
+      subtotal: item.price * item.quantity,
+      stock: item.product.stock,
+      isAvailable: item.product.isActive && item.product.stock > 0,
+    }));
+
+    const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
+    const discount = cart.discountAmount || 0;
+    const subtotalAfterDiscount = Math.max(0, subtotal - discount);
+
+    // German VAT: 19%
+    const tax = subtotalAfterDiscount * 0.19;
+
+    // Shipping calculation (simplified)
+    const shipping = subtotal >= 50 ? 0 : 4.99; // Free shipping over 50€
+
+    const total = subtotalAfterDiscount + shipping;
 
     return {
-      itemCount,
+      items,
+      totalItems: items.reduce((sum, item) => sum + item.quantity, 0),
+      totalProducts: items.length,
       subtotal: Number(subtotal.toFixed(2)),
       tax: Number(tax.toFixed(2)),
+      shipping: Number(shipping.toFixed(2)),
       total: Number(total.toFixed(2)),
+      discount: Number(discount.toFixed(2)),
+      createdAt: cart.createdAt,
+      updatedAt: cart.updatedAt,
     };
   }
 
-  async getCartItemCount(userId: string): Promise<number> {
-    const cart = await this.prisma.cart.findUnique({
-      where: { userId },
-      include: {
-        items: true,
-      },
-    });
+  /**
+   * Validate discount code (placeholder)
+   */
+  private async validateDiscountCode(code: string) {
+    // TODO: Implement actual discount validation
+    // This will be implemented in the Discounts module
+    return null;
+  }
 
-    if (!cart) {
-      return 0;
+  /**
+   * Check if cart is valid for checkout
+   */
+  async validateCartForCheckout(userId: string) {
+    const cart = await this.getCart(userId);
+
+    if (cart.items.length === 0) {
+      throw new BadRequestException('Warenkorb ist leer');
     }
 
-    return cart.items.reduce((total, item) => total + item.quantity, 0);
+    // Check if all items are available and in stock
+    for (const item of cart.items) {
+      if (!item.isAvailable) {
+        throw new BadRequestException(
+          `Produkt "${item.productName}" ist nicht mehr verfügbar`,
+        );
+      }
+
+      if (item.stock < item.quantity) {
+        throw new BadRequestException(
+          `Nicht genügend Lagerbestand für "${item.productName}". Verfügbar: ${item.stock}`,
+        );
+      }
+    }
+
+    return { valid: true, cart };
   }
 }
