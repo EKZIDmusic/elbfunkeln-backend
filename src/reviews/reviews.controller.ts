@@ -102,8 +102,7 @@ export class AdminReviewsController {
   @ApiOperation({ summary: 'Get all reviews (Admin)' })
   @ApiResponse({ status: 200, description: 'Reviews retrieved successfully' })
   getAllReviews(@Query('approved') approved?: string) {
-    const isApproved =
-      approved !== undefined ? approved === 'true' : undefined;
+    const isApproved = approved !== undefined ? approved === 'true' : undefined;
     return this.reviewsService.getAllReviews(isApproved);
   }
 

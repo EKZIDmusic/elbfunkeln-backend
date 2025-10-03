@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/order.dto';
-import { OrderFilterDto, UpdateOrderStatusDto, UpdateTrackingDto } from './dto/order-filter.dto';
+import {
+  OrderFilterDto,
+  UpdateOrderStatusDto,
+  UpdateTrackingDto,
+} from './dto/order-filter.dto';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { generateOrderNumber } from '../common/utils/helpers';
@@ -77,10 +81,7 @@ export class OrdersService {
       if (discount && discount.isActive) {
         const now = new Date();
         if (now >= discount.validFrom && now <= discount.validUntil) {
-          if (
-            !discount.maxUses ||
-            discount.usedCount < discount.maxUses
-          ) {
+          if (!discount.maxUses || discount.usedCount < discount.maxUses) {
             if (
               !discount.minOrderAmount ||
               subtotal >= Number(discount.minOrderAmount)
@@ -195,7 +196,14 @@ export class OrdersService {
   }
 
   async findUserOrders(userId: string, filterDto: OrderFilterDto) {
-    const { page = 1, limit = 10, status, paymentStatus, sortBy = 'createdAt', sortOrder = 'desc' } = filterDto;
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      paymentStatus,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+    } = filterDto;
     const skip = (page - 1) * limit;
 
     const where: Prisma.OrderWhereInput = { userId };
@@ -272,9 +280,7 @@ export class OrdersService {
 
     // Only pending or confirmed orders can be cancelled
     if (!['PENDING', 'CONFIRMED'].includes(order.status)) {
-      throw new BadRequestException(
-        'Order cannot be cancelled at this stage',
-      );
+      throw new BadRequestException('Order cannot be cancelled at this stage');
     }
 
     // Update order status

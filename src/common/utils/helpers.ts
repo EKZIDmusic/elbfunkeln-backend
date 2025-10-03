@@ -13,7 +13,10 @@ export function generateRandomString(length: number): string {
 /**
  * Generate unique code (for gift cards, discount codes, etc.)
  */
-export function generateUniqueCode(prefix?: string, length: number = 8): string {
+export function generateUniqueCode(
+  prefix?: string,
+  length: number = 8,
+): string {
   const code = generateRandomString(length).toUpperCase();
   return prefix ? `${prefix}-${code}` : code;
 }

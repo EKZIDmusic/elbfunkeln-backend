@@ -145,7 +145,9 @@ export class PaymentsController {
     const rawBody = request.rawBody;
 
     if (!rawBody) {
-      throw new Error('Raw body is required for webhook signature verification');
+      throw new Error(
+        'Raw body is required for webhook signature verification',
+      );
     }
 
     const event = this.stripeService.constructWebhookEvent(rawBody, signature);

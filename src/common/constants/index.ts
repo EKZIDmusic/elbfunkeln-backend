@@ -32,12 +32,7 @@ export const ORDER_STATUS_TRANSITIONS = {
  */
 export const FILE_UPLOAD = {
   MAX_SIZE: 5 * 1024 * 1024, // 5MB
-  ALLOWED_MIME_TYPES: [
-    'image/jpeg',
-    'image/png',
-    'image/webp',
-    'image/gif',
-  ],
+  ALLOWED_MIME_TYPES: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
   MAX_FILES_PER_PRODUCT: 10,
 } as const;
 
@@ -82,7 +77,8 @@ export const REGEX_PATTERNS = {
   EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
   PHONE_DE: /^(\+49|0)[1-9]\d{1,14}$/,
   ZIP_CODE_DE: /^\d{5}$/,
-  PASSWORD: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
+  PASSWORD:
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
   SKU: /^[A-Z0-9-]+$/,
 } as const;
 

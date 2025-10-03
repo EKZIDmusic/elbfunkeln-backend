@@ -9,7 +9,7 @@ export class StripeService {
 
   constructor(private readonly configService: ConfigService) {
     const secretKey = this.configService.get<string>('stripe.secretKey');
-    
+
     if (!secretKey) {
       throw new Error('Stripe secret key is not configured');
     }
@@ -90,9 +90,8 @@ export class StripeService {
     paymentIntentId: string,
   ): Promise<Stripe.PaymentIntent> {
     try {
-      const paymentIntent = await this.stripe.paymentIntents.cancel(
-        paymentIntentId,
-      );
+      const paymentIntent =
+        await this.stripe.paymentIntents.cancel(paymentIntentId);
 
       this.logger.log(`Payment Intent cancelled: ${paymentIntent.id}`);
       return paymentIntent;
@@ -117,7 +116,9 @@ export class StripeService {
         reason: reason as Stripe.RefundCreateParams.Reason,
       });
 
-      this.logger.log(`Refund created: ${refund.id} for PI: ${paymentIntentId}`);
+      this.logger.log(
+        `Refund created: ${refund.id} for PI: ${paymentIntentId}`,
+      );
       return refund;
     } catch (error) {
       this.logger.error('Error creating refund:', error);
@@ -153,7 +154,9 @@ export class StripeService {
    */
   async retrieveCustomer(customerId: string): Promise<Stripe.Customer> {
     try {
-      return (await this.stripe.customers.retrieve(customerId)) as Stripe.Customer;
+      return (await this.stripe.customers.retrieve(
+        customerId,
+      )) as Stripe.Customer;
     } catch (error) {
       this.logger.error('Error retrieving customer:', error);
       throw new BadRequestException('Kunde nicht gefunden');
@@ -179,7 +182,9 @@ export class StripeService {
       return paymentMethod;
     } catch (error) {
       this.logger.error('Error attaching payment method:', error);
-      throw new BadRequestException('Fehler beim Hinzufügen der Zahlungsmethode');
+      throw new BadRequestException(
+        'Fehler beim Hinzufügen der Zahlungsmethode',
+      );
     }
   }
 
@@ -190,15 +195,16 @@ export class StripeService {
     paymentMethodId: string,
   ): Promise<Stripe.PaymentMethod> {
     try {
-      const paymentMethod = await this.stripe.paymentMethods.detach(
-        paymentMethodId,
-      );
+      const paymentMethod =
+        await this.stripe.paymentMethods.detach(paymentMethodId);
 
       this.logger.log(`Payment Method detached: ${paymentMethodId}`);
       return paymentMethod;
     } catch (error) {
       this.logger.error('Error detaching payment method:', error);
-      throw new BadRequestException('Fehler beim Entfernen der Zahlungsmethode');
+      throw new BadRequestException(
+        'Fehler beim Entfernen der Zahlungsmethode',
+      );
     }
   }
 
@@ -236,9 +242,7 @@ export class StripeService {
         },
       });
 
-      this.logger.log(
-        `Default payment method set for customer ${customerId}`,
-      );
+      this.logger.log(`Default payment method set for customer ${customerId}`);
       return customer;
     } catch (error) {
       this.logger.error('Error setting default payment method:', error);
@@ -255,7 +259,9 @@ export class StripeService {
     payload: string | Buffer,
     signature: string,
   ): Stripe.Event {
-    const webhookSecret = this.configService.get<string>('stripe.webhookSecret');
+    const webhookSecret = this.configService.get<string>(
+      'stripe.webhookSecret',
+    );
 
     if (!webhookSecret) {
       throw new Error('Stripe webhook secret is not configured');

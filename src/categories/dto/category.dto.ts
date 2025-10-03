@@ -15,12 +15,16 @@ export class CreateCategoryDto {
   @MaxLength(100)
   name: string;
 
-  @ApiPropertyOptional({ example: 'Handgefertigte Drahtringe in verschiedenen Designs' })
+  @ApiPropertyOptional({
+    example: 'Handgefertigte Drahtringe in verschiedenen Designs',
+  })
   @IsOptional()
   @IsString()
   description?: string;
 
-  @ApiPropertyOptional({ example: 'https://example.com/images/category-ringe.jpg' })
+  @ApiPropertyOptional({
+    example: 'https://example.com/images/category-ringe.jpg',
+  })
   @IsOptional()
   @IsString()
   image?: string;

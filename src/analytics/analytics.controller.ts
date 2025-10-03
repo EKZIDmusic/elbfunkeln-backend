@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -14,11 +7,7 @@ import {
 } from '@nestjs/swagger';
 import { AnalyticsService } from './analytics.service';
 import { TrackEventDto, AnalyticsFilterDto } from './dto/analytics.dto';
-import {
-  Public,
-  GetUser,
-  Roles,
-} from '../auth/decorators/auth.decorators';
+import { Public, GetUser, Roles } from '../auth/decorators/auth.decorators';
 import { GetIp, GetUserAgent } from '../common/decorators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';

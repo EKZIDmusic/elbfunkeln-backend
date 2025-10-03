@@ -55,10 +55,7 @@ export class ProductsController {
   @Get('search')
   @ApiOperation({ summary: 'Search products' })
   @ApiResponse({ status: 200, description: 'Search results retrieved' })
-  searchProducts(
-    @Query('q') query: string,
-    @Query('limit') limit?: number,
-  ) {
+  searchProducts(@Query('q') query: string, @Query('limit') limit?: number) {
     return this.productsService.searchProducts(query, limit);
   }
 

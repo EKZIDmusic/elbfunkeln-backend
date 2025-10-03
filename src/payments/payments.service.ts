@@ -2,7 +2,10 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StripeService } from './stripe/stripe.service';
 import { CreatePaymentIntentDto } from './dto/create-payment-intent.dto';
-import { SavePaymentMethodDto, PaymentMethodResponseDto } from './dto/payment-method.dto';
+import {
+  SavePaymentMethodDto,
+  PaymentMethodResponseDto,
+} from './dto/payment-method.dto';
 
 @Injectable()
 export class PaymentsService {
@@ -18,7 +21,8 @@ export class PaymentsService {
     userId: string,
     createPaymentIntentDto: CreatePaymentIntentDto,
   ) {
-    const { amount, currency, orderId, description, metadata } = createPaymentIntentDto;
+    const { amount, currency, orderId, description, metadata } =
+      createPaymentIntentDto;
 
     // Get or create Stripe customer
     const user = await this.prisma.user.findUnique({
@@ -69,9 +73,8 @@ export class PaymentsService {
    * Get Payment Intent Status
    */
   async getPaymentIntentStatus(paymentIntentId: string) {
-    const paymentIntent = await this.stripeService.retrievePaymentIntent(
-      paymentIntentId,
-    );
+    const paymentIntent =
+      await this.stripeService.retrievePaymentIntent(paymentIntentId);
 
     return {
       id: paymentIntent.id,
@@ -103,9 +106,8 @@ export class PaymentsService {
    * Cancel Payment
    */
   async cancelPayment(paymentIntentId: string) {
-    const paymentIntent = await this.stripeService.cancelPaymentIntent(
-      paymentIntentId,
-    );
+    const paymentIntent =
+      await this.stripeService.cancelPaymentIntent(paymentIntentId);
 
     return {
       id: paymentIntent.id,
@@ -187,7 +189,9 @@ export class PaymentsService {
   /**
    * Get Saved Payment Methods
    */
-  async getSavedPaymentMethods(userId: string): Promise<PaymentMethodResponseDto[]> {
+  async getSavedPaymentMethods(
+    userId: string,
+  ): Promise<PaymentMethodResponseDto[]> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
@@ -204,8 +208,8 @@ export class PaymentsService {
       user.stripeCustomerId,
     );
 
-    const defaultPaymentMethodId =
-      customer.invoice_settings?.default_payment_method as string | null;
+    const defaultPaymentMethodId = customer.invoice_settings
+      ?.default_payment_method as string | null;
 
     return paymentMethods.map((pm) => ({
       id: pm.id,
@@ -240,7 +244,9 @@ export class PaymentsService {
       user.stripeCustomerId,
     );
 
-    const paymentMethod = paymentMethods.find((pm) => pm.id === paymentMethodId);
+    const paymentMethod = paymentMethods.find(
+      (pm) => pm.id === paymentMethodId,
+    );
 
     if (!paymentMethod) {
       throw new NotFoundException('Zahlungsmethode nicht gefunden');

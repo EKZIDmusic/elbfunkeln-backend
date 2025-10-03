@@ -19,7 +19,8 @@ export class CreateDiscountDto {
   @IsString()
   @MaxLength(50)
   @Matches(/^[A-Z0-9-_]+$/, {
-    message: 'Code must contain only uppercase letters, numbers, hyphens and underscores',
+    message:
+      'Code must contain only uppercase letters, numbers, hyphens and underscores',
   })
   code: string;
 

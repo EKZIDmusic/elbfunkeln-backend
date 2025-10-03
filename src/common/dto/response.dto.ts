@@ -29,7 +29,11 @@ export class ResponseDto<T = any> {
     this.timestamp = new Date().toISOString();
   }
 
-  static success<T>(data: T, message?: string, statusCode = 200): ResponseDto<T> {
+  static success<T>(
+    data: T,
+    message?: string,
+    statusCode = 200,
+  ): ResponseDto<T> {
     return new ResponseDto(true, statusCode, data, message);
   }
 

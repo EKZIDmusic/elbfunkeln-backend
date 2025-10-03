@@ -17,29 +17,23 @@ export class StripeWebhookHandler {
 
     switch (event.type) {
       case 'payment_intent.succeeded':
-        await this.handlePaymentIntentSucceeded(
-          event.data.object as Stripe.PaymentIntent,
-        );
+        await this.handlePaymentIntentSucceeded(event.data.object);
         break;
 
       case 'payment_intent.payment_failed':
-        await this.handlePaymentIntentFailed(
-          event.data.object as Stripe.PaymentIntent,
-        );
+        await this.handlePaymentIntentFailed(event.data.object);
         break;
 
       case 'payment_intent.canceled':
-        await this.handlePaymentIntentCanceled(
-          event.data.object as Stripe.PaymentIntent,
-        );
+        await this.handlePaymentIntentCanceled(event.data.object);
         break;
 
       case 'charge.succeeded':
-        await this.handleChargeSucceeded(event.data.object as Stripe.Charge);
+        await this.handleChargeSucceeded(event.data.object);
         break;
 
       case 'charge.refunded':
-        await this.handleChargeRefunded(event.data.object as Stripe.Charge);
+        await this.handleChargeRefunded(event.data.object);
         break;
 
       case 'customer.created':
@@ -206,7 +200,9 @@ export class StripeWebhookHandler {
       });
 
       if (!order) {
-        this.logger.warn(`No order found for payment intent ${paymentIntentId}`);
+        this.logger.warn(
+          `No order found for payment intent ${paymentIntentId}`,
+        );
         return;
       }
 

@@ -149,7 +149,11 @@ export class ReviewsService {
     });
   }
 
-  async update(userId: string, reviewId: string, updateReviewDto: UpdateReviewDto) {
+  async update(
+    userId: string,
+    reviewId: string,
+    updateReviewDto: UpdateReviewDto,
+  ) {
     const review = await this.prisma.review.findUnique({
       where: { id: reviewId },
     });

@@ -64,10 +64,7 @@ export class CartController {
   @ApiOperation({ summary: 'Remove item from cart' })
   @ApiResponse({ status: 200, description: 'Item removed successfully' })
   @ApiResponse({ status: 404, description: 'Item not found' })
-  async removeItem(
-    @GetUser('id') userId: string,
-    @Param('id') itemId: string,
-  ) {
+  async removeItem(@GetUser('id') userId: string, @Param('id') itemId: string) {
     return this.cartService.removeItem(userId, itemId);
   }
 

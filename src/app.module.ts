@@ -19,6 +19,17 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { HealthModule } from './health/health.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
+import { ShippingModule } from './shipping/shipping.module';
+import { ReturnsModule } from './returns/returns.module';
+import { KpisModule } from './kpis/kpis.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { SocialModule } from './social/social.module';
+import { AccountingModule } from './accounting/accounting.module';
+import { LegalModule } from './legal/legal.module';
+import { CookiesModule } from './cookies/cookies.module';
+import { SearchModule } from './search/search.module';
+import { TaxModule } from './tax/tax.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 
 @Module({
   imports: [
@@ -54,6 +65,17 @@ import { RolesGuard } from './auth/guards/roles.guard';
     NewsletterModule,
     AnalyticsModule,
     HealthModule,
+    ShippingModule,
+    ReturnsModule,
+    KpisModule,
+    DashboardModule,
+    SocialModule,
+    AccountingModule,
+    LegalModule,
+    CookiesModule,
+    SearchModule,
+    TaxModule,
+    IntegrationsModule,
   ],
   providers: [
     // Global Guards

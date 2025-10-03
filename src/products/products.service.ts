@@ -290,9 +290,7 @@ export class ProductsService {
       });
 
       if (existingProduct) {
-        throw new ConflictException(
-          'A product with this name already exists',
-        );
+        throw new ConflictException('A product with this name already exists');
       }
     }
 

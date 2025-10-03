@@ -9,7 +9,12 @@ export const MAX_LIMIT = 100;
 
 // File Upload
 export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+export const ALLOWED_IMAGE_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+];
 export const ALLOWED_DOCUMENT_TYPES = ['application/pdf', 'application/msword'];
 
 // Product

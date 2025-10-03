@@ -1,27 +1,24 @@
-import { IsString, IsOptional, IsEmail, Matches } from 'class-validator';
+import { IsString, IsEmail, IsOptional } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateProfileDto {
-  @ApiPropertyOptional({ example: 'Max' })
-  @IsOptional()
+  @ApiPropertyOptional()
   @IsString()
+  @IsOptional()
   firstName?: string;
 
-  @ApiPropertyOptional({ example: 'Mustermann' })
-  @IsOptional()
+  @ApiPropertyOptional()
   @IsString()
+  @IsOptional()
   lastName?: string;
 
-  @ApiPropertyOptional({ example: 'max@example.com' })
-  @IsOptional()
+  @ApiPropertyOptional()
   @IsEmail()
+  @IsOptional()
   email?: string;
 
-  @ApiPropertyOptional({ example: '+49 123 456789' })
-  @IsOptional()
+  @ApiPropertyOptional()
   @IsString()
-  @Matches(/^(\+49|0)[1-9]\d{1,14}$/, {
-    message: 'Invalid German phone number',
-  })
+  @IsOptional()
   phone?: string;
 }

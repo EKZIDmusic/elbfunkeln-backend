@@ -1,4 +1,10 @@
-import { IsEmail, IsString, IsOptional, IsArray, IsObject } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  IsOptional,
+  IsArray,
+  IsObject,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SendEmailDto {
@@ -20,18 +26,18 @@ export class SendEmailDto {
   @IsString()
   html?: string;
 
-  @ApiPropertyOptional({ 
+  @ApiPropertyOptional({
     example: ['cc@example.com'],
-    description: 'CC-Empfänger' 
+    description: 'CC-Empfänger',
   })
   @IsOptional()
   @IsArray()
   @IsEmail({}, { each: true })
   cc?: string[];
 
-  @ApiPropertyOptional({ 
+  @ApiPropertyOptional({
     example: ['bcc@example.com'],
-    description: 'BCC-Empfänger' 
+    description: 'BCC-Empfänger',
   })
   @IsOptional()
   @IsArray()
@@ -40,7 +46,7 @@ export class SendEmailDto {
 
   @ApiPropertyOptional({
     description: 'Template-Variablen',
-    example: { name: 'Max', orderNumber: 'ELB-2024-001' }
+    example: { name: 'Max', orderNumber: 'ELB-2024-001' },
   })
   @IsOptional()
   @IsObject()

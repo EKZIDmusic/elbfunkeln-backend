@@ -224,50 +224,57 @@ export class AnalyticsService {
   }
 
   private async getOrderStats(startDate: Date, endDate: Date) {
-    const [total, pending, confirmed, processing, shipped, delivered, cancelled] =
-      await Promise.all([
-        this.prisma.order.count({
-          where: {
-            createdAt: { gte: startDate, lte: endDate },
-          },
-        }),
-        this.prisma.order.count({
-          where: {
-            createdAt: { gte: startDate, lte: endDate },
-            status: OrderStatus.PENDING,
-          },
-        }),
-        this.prisma.order.count({
-          where: {
-            createdAt: { gte: startDate, lte: endDate },
-            status: OrderStatus.CONFIRMED,
-          },
-        }),
-        this.prisma.order.count({
-          where: {
-            createdAt: { gte: startDate, lte: endDate },
-            status: OrderStatus.PROCESSING,
-          },
-        }),
-        this.prisma.order.count({
-          where: {
-            createdAt: { gte: startDate, lte: endDate },
-            status: OrderStatus.SHIPPED,
-          },
-        }),
-        this.prisma.order.count({
-          where: {
-            createdAt: { gte: startDate, lte: endDate },
-            status: OrderStatus.DELIVERED,
-          },
-        }),
-        this.prisma.order.count({
-          where: {
-            createdAt: { gte: startDate, lte: endDate },
-            status: OrderStatus.CANCELLED,
-          },
-        }),
-      ]);
+    const [
+      total,
+      pending,
+      confirmed,
+      processing,
+      shipped,
+      delivered,
+      cancelled,
+    ] = await Promise.all([
+      this.prisma.order.count({
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+        },
+      }),
+      this.prisma.order.count({
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+          status: OrderStatus.PENDING,
+        },
+      }),
+      this.prisma.order.count({
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+          status: OrderStatus.CONFIRMED,
+        },
+      }),
+      this.prisma.order.count({
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+          status: OrderStatus.PROCESSING,
+        },
+      }),
+      this.prisma.order.count({
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+          status: OrderStatus.SHIPPED,
+        },
+      }),
+      this.prisma.order.count({
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+          status: OrderStatus.DELIVERED,
+        },
+      }),
+      this.prisma.order.count({
+        where: {
+          createdAt: { gte: startDate, lte: endDate },
+          status: OrderStatus.CANCELLED,
+        },
+      }),
+    ]);
 
     return {
       total,

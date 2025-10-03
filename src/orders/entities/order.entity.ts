@@ -72,14 +72,18 @@ export class OrderEntity implements Order {
   // Computed properties
   @ApiProperty()
   get canBeCancelled(): boolean {
-    return this.status === OrderStatus.PENDING || 
-           this.status === OrderStatus.CONFIRMED;
+    return (
+      this.status === OrderStatus.PENDING ||
+      this.status === OrderStatus.CONFIRMED
+    );
   }
 
   @ApiProperty()
   get isInProgress(): boolean {
-    return this.status === OrderStatus.PROCESSING || 
-           this.status === OrderStatus.SHIPPED;
+    return (
+      this.status === OrderStatus.PROCESSING ||
+      this.status === OrderStatus.SHIPPED
+    );
   }
 
   @ApiProperty()
